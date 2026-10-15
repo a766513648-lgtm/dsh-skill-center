@@ -266,8 +266,14 @@ export async function moveToTrash(params: {
     if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) {
       return { ok: false, error: { code: 'error.delete.rootUnsafe', message: 'The skills directory is not a real directory.' } };
     }
-    const [resolvedRoot, canonicalRoot] = await Promise.all([realpath(rootPath), Promise.resolve(resolve(rootPath))]);
-    if (identity(resolvedRoot) !== identity(canonicalRoot)) {
+    // The canonical path is compared with the path as written, not with its
+    // `resolve`: on Windows `resolve` preserves an 8.3 short name
+    // (`C:\Users\RUNNER~1\...`) while `realpath` expands it, so comparing those two
+    // compares spellings and would refuse an ordinary directory on any machine whose
+    // temp path uses short names. A link or junction still differs from its own
+    // canonical form, which is the case this has to catch.
+    const resolvedRoot = await realpath(rootPath);
+    if (identity(resolvedRoot) !== identity(rootPath)) {
       return { ok: false, error: { code: 'error.delete.rootUnsafe', message: 'The skills directory resolves to another location.' } };
     }
   } catch {
@@ -287,10 +293,12 @@ export async function moveToTrash(params: {
   // Gate 6: the resolved location must still be inside the root. On Windows a
   // junction reports as an ordinary directory and `lstat` cannot see it, so a
   // bundle that looks local can actually be a redirect to somewhere else — and
-  // moving it would take the *target* with it. Resolving catches that.
+  // moving it would take the *target* with it. Resolving catches that. As above, the
+  // comparison is against the path as written so a short name is not mistaken for a
+  // redirect.
   try {
-    const [resolvedTarget, requestedTarget] = await Promise.all([realpath(target), Promise.resolve(resolve(target))]);
-    if (identity(resolvedTarget) !== identity(requestedTarget)) {
+    const resolvedTarget = await realpath(target);
+    if (identity(resolvedTarget) !== identity(target)) {
       return {
         ok: false,
         error: { code: 'error.delete.symlink', message: 'This skill resolves to another location and is not moved.' },

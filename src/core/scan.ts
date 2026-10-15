@@ -183,11 +183,20 @@ export async function scanRoot(params: {
       };
     }
     // On Windows a junction reports as an ordinary directory and is not a
-    // symbolic link, so `lstat` alone cannot see it. Comparing the resolved
-    // path with the requested one catches that redirect (and any other
-    // reparse point) before the directory is read.
-    const [resolved, requested] = await Promise.all([realpath(params.path), Promise.resolve(resolve(params.path))]);
-    if (identity(resolved) !== identity(requested)) {
+    // symbolic link, so `lstat` alone cannot see it. Comparing the canonical path
+    // with the path as written catches that redirect (and any other reparse point)
+    // before the directory is read.
+    //
+    // The canonical side is `realpath` and the other side is the *original* string,
+    // not its `resolve`. The difference matters on Windows: `resolve` keeps a short
+    // name (`C:\Users\RUNNER~1\...`) exactly as written while `realpath` expands it
+    // to `C:\Users\runneradmin\...`, so comparing those two compares spellings
+    // rather than locations and refuses a perfectly ordinary directory on any
+    // machine whose temp path uses 8.3 names. Comparing the canonical form against
+    // the original still differs whenever a link or junction is involved, which is
+    // the case that has to be caught.
+    const [resolved, original] = await Promise.all([realpath(params.path), Promise.resolve(params.path)]);
+    if (identity(resolved) !== identity(original)) {
       return {
         ...base,
         exists: false,
