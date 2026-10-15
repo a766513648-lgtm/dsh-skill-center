@@ -1,5 +1,7 @@
 # @suifengshiqu/skill-center
 
+**English** · [简体中文](README.zh.md)
+
 **Skill Center** adds one page to the DSH Web client where you can see every skill DSH can load from your own directories, read one, switch it on or off, create one, install one from a link, and delete one into a trash you can restore from.
 
 It is a third-party DSH plugin, not an official DeepSeek product. Licensed under the [MIT License](LICENSE).
@@ -111,6 +113,14 @@ A skill whose frontmatter cannot be parsed is listed with a diagnosis and its sw
 
 ## Install
 
+From npm, which needs nothing on the machine but DSH:
+
+```powershell
+dsh plugin --profile <your-profile> add @suifengshiqu/skill-center
+```
+
+From source, if you want to change it:
+
 ```powershell
 git clone https://github.com/a766513648-lgtm/dsh-skill-center.git
 cd dsh-skill-center
@@ -119,15 +129,19 @@ npm run verify                   # type check, build, tests
 dsh plugin --profile <your-profile> add .
 ```
 
-Or install a packed tarball:
+Or from a tarball you built yourself:
 
 ```powershell
 npm pack
-dsh plugin --profile <your-profile> add .\dsh-workship-skill-center-0.1.0.tgz
+dsh plugin --profile <your-profile> add .\suifengshiqu-skill-center-0.1.0.tgz
 ```
 
 Then **restart DSH** — the host half is loaded once at start-up, so a page refresh
 alone is not enough — and open **Settings → Skill Center**.
+
+> Installing this package by its git URL does not work: pnpm refuses to run a
+> dependency's build scripts by default, and the published `lib/` is what makes the
+> npm route work. Use the registry, or clone and build.
 
 > The client half is served with an immutable cache header and its URL is keyed on
 > the bundle's modification time. Reinstalling the same version can therefore leave
