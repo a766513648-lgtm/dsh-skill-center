@@ -22,7 +22,7 @@
  */
 
 import { cp, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { skillCenterHome } from './store.ts';
 
 /** Bookkeeping version; a document with another version is ignored, not guessed at. */
@@ -266,14 +266,13 @@ export async function moveToTrash(params: {
     if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) {
       return { ok: false, error: { code: 'error.delete.rootUnsafe', message: 'The skills directory is not a real directory.' } };
     }
-    // The canonical path is compared with the path as written, not with its
-    // `resolve`: on Windows `resolve` preserves an 8.3 short name
-    // (`C:\Users\RUNNER~1\...`) while `realpath` expands it, so comparing those two
-    // compares spellings and would refuse an ordinary directory on any machine whose
-    // temp path uses short names. A link or junction still differs from its own
-    // canonical form, which is the case this has to catch.
-    const resolvedRoot = await realpath(rootPath);
-    if (identity(resolvedRoot) !== identity(rootPath)) {
+    // The same canonical-form comparison as the bundle gate below, and for the same
+    // reason: on Windows `resolve` preserves an 8.3 short name while `realpath`
+    // expands it (`C:\Users\RUNNER~1\...`), so comparing a canonical path with a
+    // resolved one compares spellings, not locations, and refuses an ordinary
+    // directory. A junction still differs from its canonical form.
+    const [resolvedRoot, resolvedRootParent] = await Promise.all([realpath(rootPath), realpath(dirname(rootPath))]);
+    if (identity(resolvedRoot) !== identity(join(resolvedRootParent, basename(rootPath)))) {
       return { ok: false, error: { code: 'error.delete.rootUnsafe', message: 'The skills directory resolves to another location.' } };
     }
   } catch {
@@ -290,22 +289,30 @@ export async function moveToTrash(params: {
     return { ok: false, error: { code: 'error.delete.missing', message: 'The skill is no longer on disk; refresh the list.' } };
   }
 
-  // Gate 6: the resolved location must still be inside the root. On Windows a
-  // junction reports as an ordinary directory and `lstat` cannot see it, so a
-  // bundle that looks local can actually be a redirect to somewhere else — and
-  // moving it would take the *target* with it. Resolving catches that. As above, the
-  // comparison is against the path as written so a short name is not mistaken for a
-  // redirect.
-  try {
-    const resolvedTarget = await realpath(target);
-    if (identity(resolvedTarget) !== identity(target)) {
-      return {
-        ok: false,
-        error: { code: 'error.delete.symlink', message: 'This skill resolves to another location and is not moved.' },
-      };
+  // Gate 6: for a *directory* bundle, the resolved location must still be the place
+  // it claims to be. On Windows a junction reports as an ordinary directory and
+  // `lstat` cannot see it, so a bundle that looks local can actually redirect
+  // somewhere else — and moving it would take the target with it.
+  //
+  // This runs only for directories: a file cannot be a junction, so for a flat skill
+  // `lstat` has already answered the question. Both sides are canonicalised, because
+  // comparing a canonical path with a merely resolved one compares spellings rather
+  // than locations and trips over Windows 8.3 short names (`C:\Users\RUNNER~1\...`).
+  if (request.kind === 'bundle') {
+    try {
+      const parent = dirname(target);
+      const [resolvedParent, resolvedTarget] = await Promise.all([realpath(parent), realpath(target)]);
+      // A junction has its own canonical path, so it no longer equals the canonical
+      // parent joined with its name. An ordinary subdirectory still does.
+      if (identity(resolvedTarget) !== identity(join(resolvedParent, basename(target)))) {
+        return {
+          ok: false,
+          error: { code: 'error.delete.symlink', message: 'This skill resolves to another location and is not moved.' },
+        };
+      }
+    } catch {
+      return { ok: false, error: { code: 'error.delete.missing', message: 'The skill is no longer on disk; refresh the list.' } };
     }
-  } catch {
-    return { ok: false, error: { code: 'error.delete.missing', message: 'The skill is no longer on disk; refresh the list.' } };
   }
 
   const trashDir = trashHome(dshHome);

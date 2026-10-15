@@ -303,7 +303,10 @@ export async function scanSkills(params: {
         key: `project-dsh:${projectKey(canonical)}`,
         label: `${basename(canonical) || canonical} (project)`,
         scope: 'project',
-        path: join(canonical, '.dsh', 'skills'),
+        // `canonical` is already the resolved form, so the root check inside
+        // `scanRoot` compares like with like instead of reporting a redirect that is
+        // only a difference in spelling.
+        path: resolve(join(canonical, '.dsh', 'skills')),
         projectRoot: canonical,
       }),
     );
