@@ -1,0 +1,8 @@
+# dsh-skill-center bundle patch
+#
+# Loaded automatically by `dsh plugin --profile <name> add <path|tgz>`; users
+# mounting it by hand can add the same insert row to
+# profiles/<name>/cordis.patch.yml.
+- insert:
+    - id: skill-center
+      name: '@dsh-workship/skill-center'

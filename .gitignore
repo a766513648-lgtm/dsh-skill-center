@@ -1,0 +1,31 @@
+# Generated build output
+lib/
+
+# Scratch tree the test runner transpiles into
+.test-build/
+
+# Scratch directories the probes write into
+.probe/
+.skill-center-test/
+
+# Throwaway skills used to exercise the panel by hand
+.demo-skills/
+
+node_modules/
+
+# Packed plugins
+*.tgz
+
+# Machine-specific npm settings; `.npmrc.example` documents what they do.
+.npmrc
+
+# A stray state dump from a diagnostic run
+dump*.txt
+.probe-out.txt
+
+# Editor and OS noise
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+*.log

@@ -1,0 +1,15 @@
+# Machine-specific npm settings.
+#
+# Two things here are specific to this development machine and are deliberately not
+# committed (see .gitignore):
+#
+#   cache  The default npm cache lives under %LOCALAPPDATA% on Windows, where this
+#          sandbox refuses writes. Every npm command then fails with EPERM, so the
+#          cache is redirected to a writable directory inside the workspace.
+#
+# Copy this file to `.npmrc` and adjust `cache` if your environment has the same
+# restriction. Nothing here is needed to use the plugin, only to build it.
+registry=https://registry.npmjs.org/
+cache=O:/DSH_Workship/.npm-cache
+fund=false
+audit=false

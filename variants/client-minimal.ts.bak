@@ -1,0 +1,102 @@
+/**
+ * Skill Center — browser half (minimal self-reporting build).
+ *
+ * TEMPORARY DIAGNOSTIC VARIANT. It registers a page whose only content is a
+ * paragraph, imports nothing beyond React's JSX runtime, and reports any failure
+ * straight back to the host half over `/api/skill-center/client-report`, which
+ * writes it to stderr where the desktop log can capture it.
+ *
+ * Purpose: separate "the client module machinery cannot load this plugin at all"
+ * from "something inside the real page throws". The real page is restored once
+ * the answer is known.
+ *
+ * @module @dsh-workship/skill-center/client
+ */
+
+import type { Context } from '@deepseek-ai/cordis';
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
+import type {} from '@deepseek-ai/dsh-client-locale/client';
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client';
+import { MinimalSection } from './MinimalSection.tsx';
+import { en, NS, zh } from './locales.ts';
+
+/** Services this browser half needs. */
+export const inject = ['slots', 'locale'];
+
+/** Report one failure back to the host, and to the console as a fallback. */
+function report(step: string, error: unknown): void {
+  const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+  try {
+    console.error(`skill-center/minimal: ${step} failed`, error);
+  } catch {
+    // Console may be unavailable.
+  }
+  try {
+    const transport = (globalThis as { fetch?: unknown }).fetch;
+    if (typeof transport === 'function') {
+      void fetch('/api/skill-center/client-report', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json', 'x-skill-center': '1' },
+        body: JSON.stringify({ step, detail, stack }),
+      }).catch(() => undefined);
+    }
+  } catch {
+    // fetch may be unavailable.
+  }
+}
+
+/** The page: one static paragraph, no data and no host calls. */
+
+/**
+ * Register the minimal page.
+ * @param ctx - the browser plugin context.
+ */
+export function apply(ctx: Context): void {
+  try {
+    report('apply.enter', 'reached');
+
+    // Report which capabilities the context actually exposes, so a shifted host
+    // contract is visible without a browser console.
+    report('context.probe', JSON.stringify({
+      hasLocale: typeof (ctx as { locale?: unknown }).locale === 'object',
+      hasBind: typeof (ctx as { locale?: { bind?: unknown } }).locale?.bind === 'function',
+      hasSlots: typeof (ctx as { slots?: unknown }).slots === 'object',
+      hasEffect: typeof ctx.effect === 'function',
+    }));
+
+    try {
+      ctx.effect(
+        () =>
+          ctx.locale.register(NS, {
+            zh,
+            en,
+          }),
+        'skill-center: minimal dictionaries',
+      );
+    } catch (error) {
+      report('locale.register', error);
+    }
+
+    try {
+      ctx.slots.register(
+        {
+          name: 'settings.section',
+          id: 'skill-center',
+          order: 60,
+          label: () => 'Skill Center',
+          locale: NS,
+          inject: () => ({}),
+        },
+        MinimalSection,
+      );
+    } catch (error) {
+      report('slots.register', error);
+    }
+
+    report('apply.ok', 'done');
+  } catch (error) {
+    report('apply.threw', error);
+  }
+}
