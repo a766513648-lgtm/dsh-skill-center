@@ -16,11 +16,12 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, relative, resolve as resolvePath } from 'node:path';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+// This file lives in `scripts/dev/`, so the project root is two levels up.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const outRoot = join(root, '.test-build', 'probe');
 const entry = process.argv[2];
 if (entry === undefined) {
-  console.error('usage: node scripts/run-one.mjs <script.mts>');
+  console.error('usage: node scripts/dev/run-one.mjs <script.mts>');
   process.exit(2);
 }
 

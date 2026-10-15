@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for skill discovery.
  *
  * @module test/scan.test
@@ -10,6 +10,39 @@ import { mkdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanSkills } from '../src/core/scan.ts';
 import { makeTempDir, removeDir, writeBundle, writeFileAt, writeFlat } from './helpers.mts';
+import { shortNameVariant } from './shortNames.mts';
+
+test('a skills root written through a Windows short name is still scanned', async (t) => {
+  // Guards the bug that made every disk-touching test fail on CI while passing
+  // locally. A GitHub runner's temp path is `C:\Users\RUNNER~1\...`; the scan used to
+  // decide whether a root was a redirect by comparing `realpath(path)` with the path
+  // as written, and an 8.3 short name is a different spelling of the same location,
+  // so an ordinary directory was refused as "resolved elsewhere".
+  //
+  // The short spelling is discovered by comparing file identities, not by asking a
+  // shell: the suite may not spawn a process. Where no short name exists the test
+  // skips, which is honest rather than silently passing.
+  const long = await makeTempDir('skill-center-longname-');
+  const variant = shortNameVariant(long);
+  if (variant === undefined) {
+    await removeDir(long);
+    t.skip('this machine exposes no 8.3 short name for the temp directory');
+    return;
+  }
+  t.diagnostic(`short spelling: ${variant}`);
+
+  try {
+    const skills = join(variant, 'skills');
+    await writeFileAt(skills, 'short-skill/SKILL.md', '---\nname: short-skill\ndescription: Found through a short name.\n---\n\nbody\n');
+
+    const result = await scanSkills({ dshHome: variant });
+    const root = result.roots[0];
+    assert.equal(root?.exists, true, 'the root must be recognised, not refused as a redirect');
+    assert.deepEqual(root?.skills.map((skill) => skill.name), ['short-skill']);
+  } finally {
+    await removeDir(long);
+  }
+});
 
 test('finds bundles and flat files in the global root', async () => {
   const home = await makeTempDir();

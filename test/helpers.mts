@@ -16,9 +16,8 @@ export async function makeTempDir(prefix = 'skill-center-'): Promise<string> {
 /**
  * Create a throwaway directory at an explicit path.
  *
- * Used for the cross-volume test: `makeTempDir` always lands on the system temp
- * volume, so a case that needs two *different* volumes has to place one of them by
- * hand.
+ * Used by the cross-volume test: `makeTempDir` always lands on the system temp
+ * volume, so a case that needs two *different* volumes has to place one by hand.
  * @param path - absolute directory to create.
  * @returns the same path.
  */
@@ -40,14 +39,6 @@ export async function writeFileAt(root: string, relativePath: string, contents: 
   return target;
 }
 
-/** Build a valid skill document. */
-export function skillDoc(options: { name: string; description?: string; body?: string; extra?: string }): string {
-  const description = options.description ?? 'A test skill.';
-  const body = options.body ?? 'Follow these steps.';
-  const extra = options.extra === undefined ? '' : `${options.extra}\n`;
-  return `---\nname: ${options.name}\ndescription: ${description}\n${extra}---\n\n${body}\n`;
-}
-
 /** Create a directory-bundle skill under a skills root. */
 export async function writeBundle(root: string, name: string, options: { description?: string; body?: string; extra?: string } = {}): Promise<string> {
   return writeFileAt(root, `${name}/SKILL.md`, skillDoc({ name, ...options }));
@@ -56,4 +47,12 @@ export async function writeBundle(root: string, name: string, options: { descrip
 /** Create a flat-file skill under a skills root. */
 export async function writeFlat(root: string, name: string, options: { description?: string; body?: string; extra?: string } = {}): Promise<string> {
   return writeFileAt(root, `${name}.md`, skillDoc({ name, ...options }));
+}
+
+/** Build a valid skill document. */
+export function skillDoc(options: { name: string; description?: string; body?: string; extra?: string }): string {
+  const description = options.description ?? 'A test skill.';
+  const body = options.body ?? 'Follow these steps.';
+  const extra = options.extra === undefined ? '' : `${options.extra}\n`;
+  return `---\nname: ${options.name}\ndescription: ${description}\n${extra}---\n\n${body}\n`;
 }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Discovery of local DSH skills.
  *
  * Skill Center reads the same two roots the DSH filesystem provider scans for
@@ -12,7 +12,7 @@
 
 import { lstat, opendir, readFile, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { checkName, parseSkillDoc, SKILL_NAME_RE } from './parse.ts';
 import type { Diagnostic } from './parse.ts';
 
@@ -183,20 +183,22 @@ export async function scanRoot(params: {
       };
     }
     // On Windows a junction reports as an ordinary directory and is not a
-    // symbolic link, so `lstat` alone cannot see it. Comparing the canonical path
-    // with the path as written catches that redirect (and any other reparse point)
-    // before the directory is read.
+    // symbolic link, so `lstat` alone cannot see it. The check below catches that
+    // redirect (and any other reparse point) before the directory is read.
     //
-    // The canonical side is `realpath` and the other side is the *original* string,
-    // not its `resolve`. The difference matters on Windows: `resolve` keeps a short
-    // name (`C:\Users\RUNNER~1\...`) exactly as written while `realpath` expands it
-    // to `C:\Users\runneradmin\...`, so comparing those two compares spellings
-    // rather than locations and refuses a perfectly ordinary directory on any
-    // machine whose temp path uses 8.3 names. Comparing the canonical form against
-    // the original still differs whenever a link or junction is involved, which is
-    // the case that has to be caught.
-    const [resolved, original] = await Promise.all([realpath(params.path), Promise.resolve(params.path)]);
-    if (identity(resolved) !== identity(original)) {
+    // It compares the canonical directory with the canonical *parent* joined to its
+    // own name, and that shape matters. A short name is not a redirect but it is a
+    // different spelling, so any test built on textual equality trips over it:
+    // `C:\Users\RUNNER~1\...\skills` and its realpath are the same location and are
+    // never equal as strings. Building the expectation from the canonical parent
+    // instead makes this a structural test — an ordinary subdirectory always
+    // matches, a junction never does — which is what the gate is actually about.
+    const parent = dirname(resolve(params.path));
+    const [resolved, resolvedParent] = await Promise.all([
+      realpath(params.path),
+      realpath(parent).catch(() => parent),
+    ]);
+    if (identity(resolved) !== identity(join(resolvedParent, basename(resolve(params.path))))) {
       return {
         ...base,
         exists: false,

@@ -45,6 +45,12 @@ if (firstFailure < 0) {
   for (const line of lines.slice(firstFailure, firstFailure + 30)) console.log(line.slice(0, 200));
 }
 
+// Every failing case, not just the first: the shape of the list says whether the
+// cause is one bug or several.
+const failedNames = lines.filter((line) => /^not ok \d+ - /.test(line)).map((line) => line.replace(/^not ok \d+ - /, ''));
+console.log(`\n--- ${String(failedNames.length)} failing cases ---`);
+for (const name of failedNames) console.log(`  ${name}`);
+
 const summary = lines.filter((line) => /^# (tests|pass|fail|skipped)|^ℹ (tests|pass|fail|skipped)/.test(line));
 if (summary.length > 0) {
   console.log('--- summary ---');
