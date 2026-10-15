@@ -158,6 +158,12 @@ export interface DeleteResponse {
   readonly entry: TrashEntryView;
 }
 
+/** Response of `GET /roots`. */
+export interface RootsResponse {
+  /** Directories a new skill may be written into, in preference order. */
+  readonly roots: readonly string[];
+}
+
 /** Request body of `POST /create`. */
 export interface CreateRequest {
   /** Display name; the host normalizes it into a skill name. */
@@ -166,6 +172,8 @@ export interface CreateRequest {
   readonly description: string;
   /** Instruction body. */
   readonly body?: string;
+  /** Directory to write into, from `GET /roots`. Defaults to the first. */
+  readonly targetRoot?: string;
 }
 
 /** Response of `POST /create`. */
@@ -180,6 +188,8 @@ export interface CreateResponse {
 export interface InstallRequest {
   /** Link to a repository, a `.zip`, or a single `SKILL.md`. */
   readonly url: string;
+  /** Directory to write into, from `GET /roots`. Defaults to the first. */
+  readonly targetRoot?: string;
 }
 
 /** One skill written by an install. */

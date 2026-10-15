@@ -15,6 +15,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { makeTempDir, removeDir, writeBundle } from './helpers.mts';
+import { makeZip } from './zipWriter.mts';
 
 /** Load the built host half with `DSH_HOME` pointed at a throwaway directory. */
 async function loadHost(home) {
@@ -515,6 +516,126 @@ test('POST /create requires a description', async () => {
     assert.equal(refused.json.code, 'error.create.description');
   } finally {
     restore();
+    await removeDir(home);
+  }
+});
+
+test('GET /roots offers exactly the directories a skill may be written to', async () => {
+  const home = await makeTempDir('skill-center-home-');
+  try {
+    const hub = join(home, 'hub');
+    await mkdir(join(home, 'profiles', 'desktop'), { recursive: true });
+    await writeFile(
+      join(home, 'profiles', 'desktop', 'cordis.patch.yml'),
+      `- id: skill-filesystem\n  config:\n    customSkillDirs:\n      - '${hub}'\n`,
+      'utf8',
+    );
+    await mkdir(hub, { recursive: true });
+
+    const { module, restore } = await loadHost(home);
+    try {
+      const host = applyWithFakeHost(module);
+      const { status, json } = await call(host.route, { url: '/api/skill-center/roots' });
+      assert.equal(status, 200);
+      // The configured root comes first — it is the preference — and the DSH default
+      // is always available.
+      assert.deepEqual(json.roots, [hub, join(home, 'skills')]);
+    } finally {
+      restore();
+    }
+  } finally {
+    await removeDir(home);
+  }
+});
+
+test('an unregistered destination is refused rather than written to', async () => {
+  // The control lets the browser choose among directories the profile configured. It
+  // must not become a way to write anywhere, so a path outside that list is refused
+  // even though the request is otherwise well formed.
+  const { home, host, restore } = await setup();
+  const elsewhere = await makeTempDir('skill-center-elsewhere-');
+  try {
+    const refused = await call(host.route, {
+      method: 'POST',
+      url: '/api/skill-center/create',
+      headers: { 'x-skill-center': '1' },
+      body: { name: 'sneaky', description: 'Should not be written.', targetRoot: elsewhere },
+    });
+    assert.equal(refused.status, 400);
+    assert.equal(refused.json.code, 'error.root.notAllowed');
+    assert.equal(existsSync(join(elsewhere, 'sneaky')), false, 'nothing may be written outside the registered roots');
+  } finally {
+    restore();
+    await removeDir(home);
+    await removeDir(elsewhere);
+  }
+});
+
+test('a chosen destination is honoured by both create and install', async () => {
+  const home = await makeTempDir('skill-center-home-');
+  try {
+    const first = join(home, 'first-root');
+    const second = join(home, 'second-root');
+    await mkdir(join(home, 'profiles', 'desktop'), { recursive: true });
+    await writeFile(
+      join(home, 'profiles', 'desktop', 'cordis.patch.yml'),
+      `- id: skill-filesystem\n  config:\n    customSkillDirs:\n      - '${first}'\n      - '${second}'\n`,
+      'utf8',
+    );
+    await mkdir(first, { recursive: true });
+    await mkdir(second, { recursive: true });
+
+    const { module, restore } = await loadHost(home);
+    try {
+      const host = applyWithFakeHost(module);
+      const listed = await call(host.route, { url: '/api/skill-center/roots' });
+      // The configured roots first, in their own order, then the DSH default, which is
+      // always somewhere a skill may legitimately live.
+      assert.deepEqual(
+        listed.json.roots,
+        [first, second, join(home, 'skills')],
+        'every writable root is offered, configured ones first',
+      );
+
+      const created = await call(host.route, {
+        method: 'POST',
+        url: '/api/skill-center/create',
+        headers: { 'x-skill-center': '1' },
+        body: { name: 'second-choice', description: 'Goes to the second root.', targetRoot: second },
+      });
+      assert.equal(created.status, 200, `create failed: ${JSON.stringify(created.json)}`);
+      assert.equal(existsSync(join(second, 'second-choice', 'SKILL.md')), true, 'the chosen root must receive it');
+      assert.equal(existsSync(join(first, 'second-choice')), false, 'the first root must stay untouched');
+
+      // The same choice must drive an install. The download is stubbed so the test
+      // exercises the destination rather than the network.
+      const originalFetch = globalThis.fetch;
+      const payload = makeZip([{ name: 'picked/SKILL.md', contents: '---\nname: picked\ndescription: Installed into the chosen root.\n---\n\nbody\n' }]);
+      globalThis.fetch = async () => ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: (name: string) => (String(name).toLowerCase() === 'content-length' ? String(payload.length) : null) },
+        arrayBuffer: async () => payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength),
+      });
+      let installed;
+      try {
+        installed = await call(host.route, {
+          method: 'POST',
+          url: '/api/skill-center/install',
+          headers: { 'x-skill-center': '1' },
+          body: { url: 'https://example.com/skill.zip', targetRoot: second },
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+      assert.equal(installed.status, 200, `install failed: ${JSON.stringify(installed.json)}`);
+      assert.equal(existsSync(join(second, 'picked', 'SKILL.md')), true, 'the install must land in the chosen root');
+      assert.equal(existsSync(join(first, 'picked')), false, 'and not in the default one');
+    } finally {
+      restore();
+    }
+  } finally {
     await removeDir(home);
   }
 });

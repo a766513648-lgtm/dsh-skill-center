@@ -170,6 +170,57 @@ function noticeText(t: SkillCenterProps['t'], notice: PanelNotice): string {
 }
 
 /**
+ * Turn a stored timestamp into something a person reads.
+ *
+ * The host records ISO 8601 because that is the right thing to store; printing it raw
+ * shows `2026-10-15T05:20:00.000Z`, which looks like debug output. An unreadable value
+ * is passed through rather than replaced with "Invalid Date".
+ * @param iso - the recorded timestamp.
+ * @returns a localized short date and time.
+ */
+function readableTime(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+}
+
+/**
+ * Where a new skill will be written.
+ *
+ * The destinations come from the host, which derives them from the profile's own
+ * configuration, so this control never invents a directory. With one destination
+ * there is nothing to choose and the row reduces to a sentence; with several, each is
+ * a button, which avoids a dropdown that would hide the paths — and the path is the
+ * whole point of the control.
+ */
+function RootChoice(props: { t: SkillCenterProps['t']; store: PanelStore }): JSX.Element | null {
+  const { t, store } = props;
+  const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+  if (state.roots.length === 0) return null;
+  const current = state.targetRoot === '' ? (state.roots[0] ?? '') : state.targetRoot;
+
+  return (
+    <div style={styles.row}>
+      <span style={styles.muted}>{t('destination')}</span>
+      {state.roots.length === 1 ? (
+        <span style={styles.mono}>{current}</span>
+      ) : (
+        state.roots.map((root) => (
+          <Button
+            key={root}
+            variant={root === current ? 'primary' : 'outline'}
+            size="sm"
+            onClick={() => store.setTargetRoot(root)}
+          >
+            {root}
+          </Button>
+        ))
+      )}
+    </div>
+  );
+}
+
+/**
  * Install a skill from a link.
  *
  * Kept next to the list rather than inside the create form: installing a published
@@ -301,6 +352,8 @@ export function SkillCenterSection(props: SkillCenterProps): JSX.Element {
           </div>
 
           <UrlInstall t={t} store={store} />
+
+          <RootChoice t={t} store={store} />
 
           <div style={styles.row}>
             <Switch
@@ -498,7 +551,7 @@ function TrashPane(props: { t: SkillCenterProps['t']; store: PanelStore }): JSX.
             <div style={styles.cardText}>
               <div style={styles.name}>{entry.name}</div>
               <div style={styles.mono}>{entry.originalPath}</div>
-              {entry.removedAt === '' ? null : <div style={styles.muted}>{entry.removedAt}</div>}
+              {entry.removedAt === '' ? null : <div style={styles.muted}>{t('deletedAt', { when: readableTime(entry.removedAt) })}</div>}
             </div>
             <Button variant="outline" disabled={state.busy} onClick={() => void store.restore(entry.id)}>
               {t('restore')}
@@ -545,6 +598,8 @@ function CreatePane(props: { t: SkillCenterProps['t']; store: PanelStore }): JSX
       <div style={styles.header}>
         <div style={styles.title}>{t('createTitle')}</div>
       </div>
+
+      <RootChoice t={t} store={store} />
 
       <label style={styles.field}>
         <span style={styles.muted}>{t('createName')}</span>

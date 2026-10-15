@@ -10,6 +10,7 @@
  */
 
 import type {
+  RootsResponse,
   CreateResponse,
   DeleteResponse,
   DetailResponse,
@@ -64,6 +65,10 @@ export interface PanelState {
   readonly error?: PanelError;
   /** The most recent success worth confirming, replaced on the next action. */
   readonly notice?: PanelNotice;
+  /** Directories a new skill may be written into, from the host. */
+  readonly roots: readonly string[];
+  /** Which of those new skills go into; empty means the host's default. */
+  readonly targetRoot: string;
 }
 
 /** Read one JSON response, normalizing failures into an error envelope. */
@@ -119,10 +124,12 @@ export function createPanelStore(): {
   closePane: () => void;
   create: (input: { name: string; description: string; body: string }) => Promise<boolean>;
   install: (url: string) => Promise<boolean>;
+  setTargetRoot: (root: string) => void;
+  loadRoots: () => Promise<void>;
   dismissNotice: () => void;
   dispose: () => void;
 } {
-  let state: PanelState = { loaded: false, busy: false, pane: 'list', query: '', hideDisabled: false };
+  let state: PanelState = { loaded: false, busy: false, pane: 'list', query: '', hideDisabled: false, roots: [], targetRoot: '' };
   const listeners = new Set<() => void>();
 
   const publish = (next: Partial<PanelState>): void => {
@@ -158,6 +165,25 @@ export function createPanelStore(): {
     return trash;
   };
 
+  /**
+   * Read the directories a new skill may go into.
+   *
+   * Derived from the profile's own configuration rather than stored here, so there
+   * is one source of truth. A failure is swallowed: the list still renders and the
+   * host applies its own default, which is better than an error about a detail.
+   */
+  const loadRoots = async (): Promise<void> => {
+    try {
+      const { roots } = await requestJson<RootsResponse>('/roots');
+      // Keep the current choice when it is still offered, so a refresh does not
+      // silently move where new skills go.
+      const keep = roots.includes(state.targetRoot) ? state.targetRoot : (roots[0] ?? '');
+      publish({ roots, targetRoot: keep });
+    } catch {
+      publish({ roots: [], targetRoot: '' });
+    }
+  };
+
   return {
     getSnapshot: () => state,
     subscribe: (listener) => {
@@ -170,12 +196,19 @@ export function createPanelStore(): {
       try {
         const data = await requestJson<StateResponse>('/state');
         publish({ data, loaded: true, busy: false });
+        // The destinations are derived from the profile's own configuration, so they
+        // are read rather than remembered; a failure here must not fail the list, so
+        // it is ignored and the host's default applies.
+        void loadRoots();
       } catch (error) {
         fail(error, startedAtLoad);
       }
     },
     setQuery: (query) => publish({ query }),
     setHideDisabled: (hideDisabled) => publish({ hideDisabled }),
+    setTargetRoot: (targetRoot) => publish({ targetRoot }),
+    loadRoots,
+
     openDetail: async (rootKey, name) => {
       publish({ busy: true, error: undefined, pane: 'detail', detail: undefined });
       try {
@@ -250,7 +283,10 @@ export function createPanelStore(): {
     create: async (input) => {
       publish({ busy: true, error: undefined, notice: undefined });
       try {
-        const created = await requestJson<CreateResponse>('/create', { method: 'POST', body: JSON.stringify(input) });
+        const created = await requestJson<CreateResponse>('/create', {
+          method: 'POST',
+          body: JSON.stringify({ ...input, targetRoot: state.targetRoot }),
+        });
         publish({ pane: 'list', notice: { kind: 'created', detail: created.directory } });
         await reload();
         return true;
@@ -262,7 +298,10 @@ export function createPanelStore(): {
     install: async (url) => {
       publish({ busy: true, error: undefined, notice: undefined });
       try {
-        const installed = await requestJson<InstallResponse>('/install', { method: 'POST', body: JSON.stringify({ url }) });
+        const installed = await requestJson<InstallResponse>('/install', {
+          method: 'POST',
+          body: JSON.stringify({ url, targetRoot: state.targetRoot }),
+        });
         const names = installed.skills.map((skill) => skill.name).join(', ');
         publish({ pane: 'list', notice: { kind: 'installed', detail: names } });
         await reload();

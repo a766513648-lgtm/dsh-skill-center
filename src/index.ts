@@ -276,26 +276,66 @@ function yamlScalar(value: string): string {
 }
 
 /**
- * Write a new skill into one of the configured skills roots.
+ * Every directory a new skill may be written into, in preference order.
  *
- * The target is the first configured `customSkillDirs` entry, so a profile that
- * keeps its skills outside the DSH home gets new ones in the same place; otherwise
- * the default `<home>/skills` is used. Nothing existing is ever overwritten: an
- * occupied name is a refusal, not a merge.
+ * The default `<home>/skills` is always included — DSH scans it — and the profile's
+ * configured roots come first, so a profile that already keeps its skills elsewhere
+ * gets new ones in the same place. This is the complete allow-list: a request that
+ * names any other directory is refused, which is what keeps "choose where to write"
+ * from becoming "write anywhere".
+ * @param home - the resolved DSH home.
+ * @param extraRoots - roots the profile configures beyond the default.
+ * @returns absolute directories, deduplicated.
+ */
+function writableSkillRoots(home: string, extraRoots: readonly string[]): string[] {
+  const all = [...extraRoots, join(home, 'skills')];
+  const unique: string[] = [];
+  for (const root of all) {
+    if (!unique.some((seen) => identityPath(seen) === identityPath(root))) unique.push(root);
+  }
+  return unique;
+}
+
+/** Compare paths the way this platform's file system does. */
+function identityPath(path: string): string {
+  return process.platform === 'win32' ? path.toLowerCase() : path;
+}
+
+/**
+ * Parse the request's chosen root, refusing anything outside the allow-list.
+ * @param raw - the value the browser sent, if any.
+ * @param allowed - the directories the caller may choose from.
+ * @returns the chosen directory, or an error to return to the browser.
+ */
+function chooseRoot(raw: unknown, allowed: readonly string[]): { ok: true; root: string } | { ok: false; code: string; message: string } {
+  const fallback = allowed[0];
+  if (fallback === undefined) {
+    return { ok: false, code: 'error.root.none', message: 'This profile has no writable skills directory.' };
+  }
+  if (raw === undefined || raw === null || raw === '') return { ok: true, root: fallback };
+  const wanted = String(raw);
+  const match = allowed.find((root) => identityPath(root) === identityPath(resolve(wanted)));
+  if (match === undefined) {
+    return { ok: false, code: 'error.root.notAllowed', message: 'That directory is not one of the registered skill directories.' };
+  }
+  return { ok: true, root: match };
+}
+
+/**
+ * Write a new skill into a chosen skills directory.
  *
+ * Nothing existing is ever overwritten: an occupied name is a refusal, not a merge.
  * The document is built here rather than copied from a template, and the body is
  * stored as a literal block scalar, so a description containing quotes or a body
  * containing `---` cannot break the frontmatter.
- * @param params - the DSH home, the configured extra roots, and the request body.
+ * @param params - the target directory and the request body.
  * @returns the created directory, or a refusal.
  */
 async function createSkill(params: {
-  home: string;
-  extraRoots: readonly string[];
+  target: string;
   body: Record<string, unknown>;
 }): Promise<{ ok: true; value: { directory: string } } | { ok: false; error: { code: string; message: string } }> {
-  const { home, extraRoots, body } = params;
-  const target = extraRoots[0] ?? join(home, 'skills');
+  const { target, body } = params;
 
   const rawName = typeof body.name === 'string' ? body.name.trim() : '';
   const description = typeof body.description === 'string' ? body.description.trim() : '';
@@ -662,6 +702,14 @@ function applyInner(ctx: Context, home: string, extraRoots: readonly string[]): 
               return;
             }
 
+            if (req.method === 'GET' && action === '/roots') {
+              // The directories a new skill may be written into, for the browser to
+              // offer as a choice. It is derived, not stored: the profile's own
+              // configuration is the single source of truth.
+              sendJson(res, 200, { roots: writableSkillRoots(home, extraRoots) });
+              return;
+            }
+
             if (req.method === 'GET' && action === '/trash') {
               // A read, so it belongs with the other GETs rather than after the
               // POST-only guard below.
@@ -790,7 +838,12 @@ function applyInner(ctx: Context, home: string, extraRoots: readonly string[]): 
             }
 
             if (action === '/create') {
-              const created = await createSkill({ home, extraRoots, body });
+              const chosen = chooseRoot(body.targetRoot, writableSkillRoots(home, extraRoots));
+              if (!chosen.ok) {
+                sendJson(res, 400, { ok: false, code: chosen.code, error: chosen.message });
+                return;
+              }
+              const created = await createSkill({ target: chosen.root, body });
               if (!created.ok) {
                 sendJson(res, 400, { ok: false, code: created.error.code, error: created.error.message });
                 return;
@@ -806,12 +859,17 @@ function applyInner(ctx: Context, home: string, extraRoots: readonly string[]): 
                 sendJson(res, 400, { ok: false, code: 'error.install.url', error: 'Paste a link to a skill.' });
                 return;
               }
+              const chosen = chooseRoot(body.targetRoot, writableSkillRoots(home, extraRoots));
+              if (!chosen.ok) {
+                sendJson(res, 400, { ok: false, code: chosen.code, error: chosen.message });
+                return;
+              }
               if (cache === undefined) await refresh(projectRoot);
-              const targetRoot = extraRoots[0] ?? join(home, 'skills');
+              const targetRoot = chosen.root;
               // Every name already present in the target, so the install can refuse
               // an overwrite rather than replace someone's skill.
               const existingNames = (cache?.scan.roots ?? [])
-                .filter((root) => root.path === targetRoot)
+                .filter((root) => identityPath(root.path) === identityPath(targetRoot))
                 .flatMap((root) => root.skills.map((entry) => entry.name));
 
               const installed = await installFromUrl({ url, targetRoot, existingNames });

@@ -207,6 +207,10 @@ async function renderSectionMarkup() {
     pane: 'list',
     query: '',
     hideDisabled: false,
+    // The panel reads its write destinations from the host, so a stub without them
+    // would render a page that never appears in the application.
+    roots: ['O:\\DSH_Workship\\skill-hub'],
+    targetRoot: 'O:\\DSH_Workship\\skill-hub',
     data: {
       roots: [{ key: 'custom:0', label: 'skill-hub', scope: 'user', path: 'O:\\hub', exists: true, skills }],
       summary: { total: skills.length, disabled: 2, issues: 0 },

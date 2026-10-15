@@ -4,6 +4,22 @@
 
 It is a third-party DSH plugin, not an official DeepSeek product. Licensed under the [MIT License](LICENSE).
 
+![The Skill Center panel, open over the composer](docs/shots/list.png)
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![The skill list](docs/shots/list.png) | ![Creating a skill](docs/shots/create.png) |
+| **The list** — every skill DSH can load, with its switch, its provenance and its problems. The row above it is where a link goes. | **Creating one** — name, description and body, written into whichever destination is selected. |
+| ![The trash](docs/shots/trash.png) | ![The delete confirmation](docs/shots/confirm.png) |
+| **The trash** — what was deleted, where it came from, and one button to put it back. | **Deleting** — the confirmation says plainly that the skill goes to the trash, because a reversible delete is a different promise from an erase. |
+
+The screenshots are rendered from the shipped browser bundle over the Host's own
+`Modal` stylesheet, so the layout, colours and scrollbar are the ones the application
+produces; only the surrounding application window is left out. `scripts/dev/render-shots.mjs`
+regenerates them, in either theme.
+
 ## Where it appears
 
 Two entry points, both opening the same page over one shared store:
@@ -12,6 +28,10 @@ Two entry points, both opening the same page over one shared store:
 - **A `Skills` button in the composer**, in the input row beside the permission chip. It opens the page in a modal, which is the quick path for switching a skill on or off mid-task.
 
 The composer button lives in `conversation.input.left`. That is the only composer seat a plugin may extend: the permission chip (`conversation.input.permission`) and the model picker (`conversation.input.model`) are `single` seats their own plugins already hold, so nothing can be inserted between them. The button also cannot deep-link to its settings section — `openSection` is internal to the settings shell — so it opens the page directly instead.
+
+Both entries follow the Host's theme:
+
+![The same panel in the light theme](docs/shots/list-light.png)
 
 ## What it does
 
@@ -22,8 +42,18 @@ The composer button lives in `conversation.input.left`. That is the only compose
 - **Creates a skill** from a name, a description and a body.
 - **Installs a skill from a link** — a GitHub repository, a `/tree/` path inside one, a `.zip`, or a single `SKILL.md`.
 - **Deletes a skill into a trash**, and restores it from there.
+- **Writes new skills where you choose** — the destination control offers every directory the profile makes available, and the host accepts nothing else.
 - **Reports problems** the host would silently skip, such as a missing `description` or a name that is not kebab-case.
 - Follows the Host's light or dark theme.
+
+### Where new skills are written
+
+The destinations come from the Host, not from the panel: `GET /roots` answers with the
+profile's configured `customSkillDirs` followed by the default `$DSH_HOME/skills`. The
+browser offers exactly that list, and `POST /create` and `POST /install` refuse a
+directory outside it — so "choose where to write" does not become "write anywhere". With
+one destination the control is a sentence; with several, each is a button, because the
+path is the point.
 
 ### Where deletion is allowed to reach
 
