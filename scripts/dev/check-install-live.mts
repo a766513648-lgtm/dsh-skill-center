@@ -1,4 +1,4 @@
-﻿/**
+/**
  * End-to-end install check against real public URLs.
  *
  * The unit tests stub `fetch`, so they prove the logic and not the world. This runs

@@ -14,7 +14,7 @@
  * desktop log) and then downgraded to "no page" instead of taking the client
  * down.
  *
- * @module @dsh-workship/skill-center/client
+ * @module @suifengshiqu/skill-center/client
  */
 
 import type { Context } from '@deepseek-ai/cordis';

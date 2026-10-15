@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copy for the Skill Center settings page, in English and Simplified Chinese.
  *
  * @module client/locales

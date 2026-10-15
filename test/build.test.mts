@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
+import { readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -195,18 +196,39 @@ test('the browser half only references theme tokens the Host actually defines', 
   }
 });
 
-test('the published manifests carry no byte-order mark', async () => {
-  // A UTF-8 BOM makes the Host's strict JSON reader throw, and its only symptom
-  // is `skipping profile bundle "<name>": SyntaxError` on stderr followed by the
-  // plugin silently never appearing — the hardest failure mode this project has
-  // hit, and one that a text editor or a Windows scripting one-liner introduces
-  // without any visible difference in the file.
-  const paths = ['package.json', 'lib/package.json', 'cordis.patch.yml'];
-  for (const relativePath of paths) {
-    const bytes = await readFile(join(root, ...relativePath.split('/')));
-    const hasBom = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
-    assert.equal(hasBom, false, `${relativePath} starts with a UTF-8 BOM`);
+test('no shipped or source file carries a byte-order mark', async () => {
+  // A UTF-8 BOM makes the Host's strict JSON reader throw, and its only symptom is
+  // `skipping profile bundle "<name>": SyntaxError` on stderr followed by the plugin
+  // silently never appearing — the hardest failure mode this project has hit, and one
+  // that a text editor or a Windows scripting one-liner introduces with no visible
+  // difference in the file.
+  //
+  // This used to check three manifests, and a bulk edit through a shell one-liner then
+  // put a BOM on eighteen source files without any of them being noticed. The check now
+  // walks everything that ships or is read by tooling, because the invisible failure is
+  // the same wherever it lands.
+  const skipped = new Set(['node_modules', '.test-build', 'lib', '.git', 'docs']);
+  const walk = (dir) => {
+    const found = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (skipped.has(entry.name)) continue;
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) found.push(...walk(full));
+      else if (/\.(json|md|mjs|mts|ts|tsx|yml|yaml)$/.test(entry.name)) found.push(full);
+    }
+    return found;
+  };
+
+  const offenders = [];
+  for (const file of walk(root)) {
+    const bytes = await readFile(file);
+    if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+      offenders.push(file.slice(root.length));
+    }
   }
+  // Named individually: a bare deep-equal on the array says only that some file is
+  // wrong, which is the least useful thing to know about an invisible defect.
+  assert.equal(offenders.length, 0, `these files start with a UTF-8 BOM: ${offenders.join(', ')}`);
 
   // And the manifests must stay parseable as plain JSON.
   for (const relativePath of ['package.json', 'lib/package.json']) {

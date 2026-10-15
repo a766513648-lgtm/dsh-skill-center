@@ -1,4 +1,4 @@
-# @dsh-workship/skill-center
+# @suifengshiqu/skill-center
 
 **Skill Center** adds one page to the DSH Web client where you can see every skill DSH can load from your own directories, read one, switch it on or off, create one, install one from a link, and delete one into a trash you can restore from.
 

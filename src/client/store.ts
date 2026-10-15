@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Panel state for the Skill Center settings section.
  *
  * A tiny hand-rolled store keeps the browser half free of extra dependencies

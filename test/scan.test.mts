@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Unit tests for skill discovery.
  *
  * @module test/scan.test

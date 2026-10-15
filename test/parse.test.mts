@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Unit tests for frontmatter parsing.
  *
  * @module test/parse.test

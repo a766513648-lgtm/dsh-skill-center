@@ -5,4 +5,4 @@
 # profiles/<name>/cordis.patch.yml.
 - insert:
     - id: skill-center
-      name: '@dsh-workship/skill-center'
+      name: '@suifengshiqu/skill-center'

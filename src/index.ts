@@ -10,7 +10,7 @@
  * host provider would have read, so Skill Center never becomes a second source
  * of truth for skill content.
  *
- * @module @dsh-workship/skill-center
+ * @module @suifengshiqu/skill-center
  */
 
 import { homedir } from 'node:os';

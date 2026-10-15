@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tests for moving a skill to the trash and putting it back.
  *
  * The gates matter more than the happy path: deleting the wrong thing is the one

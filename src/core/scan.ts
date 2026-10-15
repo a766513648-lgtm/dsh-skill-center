@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Discovery of local DSH skills.
  *
  * Skill Center reads the same two roots the DSH filesystem provider scans for

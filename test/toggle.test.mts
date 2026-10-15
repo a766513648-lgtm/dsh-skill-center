@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Unit tests for the on/off rewrite of a skill document.
  *
  * @module test/toggle.test

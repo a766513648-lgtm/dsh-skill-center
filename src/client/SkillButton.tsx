@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The composer's Skill Center button.
  *
  * It sits in the input row next to the permission chip 鈥?the one place in the

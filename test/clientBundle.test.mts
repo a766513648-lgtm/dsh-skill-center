@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Executes the built browser half inside a stand-in for the Web client's module
  * system, so a broken internal module reference fails here instead of as a blank
  * settings page in the browser.

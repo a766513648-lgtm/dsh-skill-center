@@ -22,7 +22,7 @@
  * styles the standard scrollbar and therefore still works if this sheet is never
  * attached.
  *
- * @module @dsh-workship/skill-center/client/scrollStyles
+ * @module @suifengshiqu/skill-center/client/scrollStyles
  */
 
 import type { CSSProperties } from 'react';
